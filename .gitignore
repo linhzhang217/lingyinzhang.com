@@ -1,0 +1,6 @@
+_site/
+.DS_Store
+__pycache__/
+_originals/
+_old-git-history/
+.shrinking-tmp.jpg
