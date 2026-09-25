@@ -7,6 +7,8 @@
   --row: 320px;        /* height of a row in the photo grids */
   --gap: 20px;
   --side: 40px;
+  --panel: #f1ece5;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
 }
 [data-theme="dark"] {
   --bg: #000000;
@@ -14,6 +16,7 @@
   --muted: #7a7a7a;
   --line: #222222;
   --frame-shadow: none;
+  --panel: #151413;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,14 +57,62 @@ nav a:hover, nav a.active { color: var(--fg); }
 main { flex: 1; padding: 24px var(--side) 80px; }
 footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
 
-/* ---------- home ---------- */
-.home { display: flex; justify-content: center; align-items: center; gap: 40px; min-height: 100%; }
-.home img {
-  height: auto; width: auto;
-  max-height: min(74vh, 860px); max-width: calc((100% - (var(--n, 1) - 1) * 40px) / var(--n, 1));
-  box-shadow: var(--frame-shadow);
+/* ---------- home: single portrait ---------- */
+.home { display: flex; justify-content: center; align-items: center; min-height: 100%; }
+.home img { height: auto; width: auto; max-height: min(74vh, 860px); max-width: 100%; box-shadow: var(--frame-shadow); }
+
+/* ---------- home: turning ring of portraits ---------- */
+.ring-wrap {
+  position: relative; height: min(76vh, 860px); margin-top: -8px;
+  perspective: 1700px; perspective-origin: 50% 45%;
+  cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; outline: none;
 }
-.home img:only-child { max-width: 100%; }
+.ring-wrap.grabbing { cursor: grabbing; }
+.ring { position: absolute; inset: 0; transform-style: preserve-3d; }
+.ring-card {
+  position: absolute; left: 50%; top: 46%;
+  width: min(30vw, 440px);
+  will-change: transform, opacity;
+}
+.ring-card img { width: 100%; height: auto; box-shadow: var(--frame-shadow); pointer-events: none; -webkit-user-drag: none; }
+.ring-hint {
+  position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  transition: opacity .8s ease;
+}
+.ring-hint::before, .ring-hint::after { content: "⟵"; margin: 0 10px; }
+.ring-hint::after { content: "⟶"; }
+.ring-hint.gone { opacity: 0; }
+
+/* ---------- About: panel sliding down from the top ---------- */
+.about-panel {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 20;
+  height: min(64vh, 600px);
+  background: var(--panel); color: var(--fg);
+  transform: translateY(-101%);
+  transition: transform .9s cubic-bezier(.7,0,.2,1), background .3s ease;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.about-open .about-panel { transform: none; }
+.about-inner {
+  display: grid; grid-template-columns: minmax(0, 620px) 1fr; gap: 40px; align-items: end;
+  padding: 0 var(--side) 48px;
+}
+.about-bio p { font-size: clamp(20px, 2.1vw, 28px); line-height: 1.4; letter-spacing: -.005em; margin-bottom: .6em; }
+.about-contact { justify-self: end; text-align: right; }
+.about-contact a { border-bottom: 1px solid var(--muted); }
+.about-panel .reveal { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .6s var(--ease-out); }
+.about-open .about-panel .reveal { opacity: 1; transform: none; transition-delay: calc(.55s + var(--d, 0ms)); }
+.about-close {
+  position: absolute; top: 20px; right: 24px; width: 44px; height: 44px;
+  font-size: 30px; font-weight: 200; color: var(--muted); transition: color .2s;
+}
+.about-close:hover { color: var(--fg); }
+.about-backdrop {
+  position: fixed; inset: 0; z-index: 19; background: rgba(0,0,0,.28);
+  opacity: 0; pointer-events: none; transition: opacity .6s ease;
+}
+.about-open .about-backdrop { opacity: 1; pointer-events: auto; }
 
 /* ---------- sub navigation (projects / categories) ---------- */
 .subnav {
@@ -107,11 +158,6 @@ footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
 .cover { cursor: pointer; }
 .cover .label { margin-top: 10px; color: var(--muted); transition: color .2s; }
 .cover:hover .label { color: var(--fg); }
-
-/* ---------- about ---------- */
-.about { max-width: 440px; margin: 8vh auto 0; }
-.about p { margin-bottom: 24px; }
-.about a { border-bottom: 1px solid var(--muted); }
 
 .empty { color: var(--muted); }
 
@@ -172,8 +218,12 @@ footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
   .name { font-size: 26px; }
   nav { gap: 22px; }
   main { padding-top: 16px; }
-  .home { flex-direction: column; gap: 24px; }
-  .home img, .home img:only-child { width: 100%; max-width: 100%; max-height: none; }
+  .home img { width: 100%; max-height: none; }
+  .ring-wrap { height: 72vh; }
+  .ring-card { width: 62vw; top: 44%; }
+  .about-panel { height: auto; min-height: 70vh; }
+  .about-inner { grid-template-columns: 1fr; gap: 24px; padding-bottom: 36px; }
+  .about-contact { justify-self: start; text-align: left; }
   footer { text-align: center; }
   .subnav { margin-bottom: 28px; gap: 6px 18px; }
   .hover-title { display: none; }

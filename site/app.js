@@ -29,24 +29,89 @@
   }
 
   /* ---------- pages ---------- */
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let cleanup = null;           // tear-down for the page currently shown (e.g. the ring)
+
   function home() {
     const list = Array.isArray(S.home) ? S.home : S.home ? [S.home] : [];
-    main.innerHTML = list.length
-      ? `<div class="home" style="--n:${list.length}">${list.map((p) => img({ ...p, s: p.l }, "Self-portrait of Lingyin Zhang", true)).join("")}</div>`
-      : "";
+    if (list.length < 2) {
+      main.innerHTML = list.length
+        ? `<div class="home">${img({ ...list[0], s: list[0].l }, "Self-portrait of Lingyin Zhang", true)}</div>` : "";
+      return;
+    }
+    main.innerHTML = `<div class="ring-wrap" tabindex="0" aria-label="Self-portraits — scroll, drag or use the arrow keys to turn">
+      <div class="ring">${list.map((p, i) =>
+        `<div class="ring-card" data-i="${i}">${img({ ...p, s: p.l }, "Self-portrait of Lingyin Zhang", true)}</div>`).join("")}</div>
+      <p class="ring-hint">scroll or drag</p>
+    </div>`;
+    cleanup = ring(main.querySelector(".ring-wrap"));
   }
 
-  function about() {
-    const a = S.about;
-    main.innerHTML = `<div class="about">
-      ${a.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
-      ${a.email ? `<p><a href="mailto:${esc(a.email)}">${esc(a.email)}</a></p>` : ""}
-    </div>`;
+  /* the landing-page ring: photos sit on a slowly turning carousel */
+  function ring(wrap) {
+    const cards = [...wrap.querySelectorAll(".ring-card")];
+    const n = cards.length, step = 360 / n;
+    const hint = wrap.querySelector(".ring-hint");
+    let angle = 0, target = 0, raf = 0, drag = null, idle = 0;
+
+    function frame() {
+      angle += (target - angle) * (reduceMotion ? 1 : 0.085);
+      const r = cards[0].offsetWidth * (innerWidth < 640 ? 0.62 : n <= 3 ? 0.95 : 1.15);
+      cards.forEach((c, i) => {
+        const deg = i * step + angle, th = deg * Math.PI / 180;
+        const front = (Math.cos(th) + 1) / 2;             // 1 = facing you, 0 = at the back
+        c.style.transform = `translate(-50%, -50%) translate3d(${(Math.sin(th) * r).toFixed(1)}px, 0, ${((Math.cos(th) - 1) * r).toFixed(1)}px) rotateY(${(deg * 0.3).toFixed(2)}deg)`;
+        c.style.opacity = (0.3 + 0.7 * front).toFixed(3);
+        c.style.zIndex = Math.round(front * 100);
+        c.style.filter = front > 0.98 ? "none" : `blur(${((1 - front) * 2.5).toFixed(2)}px)`;
+      });
+      raf = (Math.abs(target - angle) > 0.02 || drag) ? requestAnimationFrame(frame) : 0;
+    }
+    const go = () => { if (!raf) raf = requestAnimationFrame(frame); };
+    const snap = () => { target = Math.round(target / step) * step; go(); };
+    const touched = () => { hint.classList.add("gone"); clearTimeout(idle); idle = setTimeout(snap, 160); };
+    const toFront = (i) => { const base = -i * step; target = base + Math.round((target - base) / 360) * 360; go(); };
+
+    wrap.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      target -= Math.max(-60, Math.min(60, d)) * 0.3;
+      touched(); go();
+    }, { passive: false });
+    wrap.addEventListener("pointerdown", (e) => {
+      drag = { x: e.clientX, a: target, moved: 0 };
+      wrap.setPointerCapture(e.pointerId); wrap.classList.add("grabbing"); go();
+    });
+    wrap.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      drag.moved = Math.max(drag.moved, Math.abs(e.clientX - drag.x));
+      target = drag.a + (e.clientX - drag.x) * 0.35; hint.classList.add("gone");
+    });
+    const end = (e) => {
+      if (!drag) return;
+      const tap = drag.moved < 6; drag = null; wrap.classList.remove("grabbing");
+      if (tap) {                                    // tap a card at the back to bring it forward
+        const hit = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el.classList && el.classList.contains("ring-card"));
+        if (hit) { toFront(+hit.dataset.i); return; }
+      }
+      snap();
+    };
+    wrap.addEventListener("pointerup", end);
+    wrap.addEventListener("pointercancel", end);
+    const onKey = (e) => {
+      if (!lb.hidden || aboutOpen) return;
+      if (e.key === "ArrowRight") { target -= step; hint.classList.add("gone"); go(); }
+      if (e.key === "ArrowLeft") { target += step; hint.classList.add("gone"); go(); }
+    };
+    document.addEventListener("keydown", onKey);
+    addEventListener("resize", go);
+    frame();
+    return () => { cancelAnimationFrame(raf); clearTimeout(idle); document.removeEventListener("keydown", onKey); removeEventListener("resize", go); };
   }
 
   function sectionIndex(section) {
     const groups = S.sections[section] || [];
-    if (!groups.length) { main.innerHTML = `<p class="empty">Coming soon.</p>`; return; }
+    if (!groups.length) { main.innerHTML = `<div><p class="empty">Coming soon.</p></div>`; return; }
     main.innerHTML = `<div class="${section}">
       ${subnav(section, groups, null)}
       <div class="grid">${groups.map((g, i) => {
@@ -71,18 +136,98 @@
       el.addEventListener("click", () => openLightbox(g.photos, +el.dataset.i)));
   }
 
+  /* ---------- About: a panel that slides down from the top ---------- */
+  const aboutPanel = document.getElementById("about");
+  const aboutLink = document.querySelector('[data-nav="about"]');
+  let aboutOpen = false;
+  (function fillAbout() {
+    const a = S.about || { paragraphs: [], email: "" };
+    let d = 0;
+    document.getElementById("about-bio").innerHTML =
+      a.paragraphs.map((p) => `<p class="reveal" style="--d:${(d++) * 70}ms">${esc(p)}</p>`).join("");
+    document.getElementById("about-contact").innerHTML = a.email
+      ? `<p class="reveal" style="--d:${(d++) * 70}ms"><a href="mailto:${esc(a.email)}">${esc(a.email)}</a></p>` : "";
+  })();
+  function setAbout(open) {
+    aboutOpen = open;
+    document.body.classList.toggle("about-open", open);
+    aboutPanel.setAttribute("aria-hidden", String(!open));
+    aboutLink.classList.toggle("active", open);
+  }
+  aboutLink.addEventListener("click", (e) => { e.preventDefault(); setAbout(!aboutOpen); });
+  document.getElementById("about-close").onclick = () => setAbout(false);
+  document.getElementById("about-backdrop").onclick = () => setAbout(false);
+  document.addEventListener("keydown", (e) => { if (aboutOpen && e.key === "Escape") setAbout(false); });
+
+  /* ---------- transitions between pages ---------- */
+  const ORDER = { "": 0, film: 1, polaroid: 2 };
+  const settle = (anims) => Promise.all(anims.map((a) => a.finished.catch(() => {})));
+  const visible = (els) => els.filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+  const rnd = (m) => (Math.random() * 2 - 1) * m;
+
+  // same category, different project: the photos drop away, the new ones fall into place
+  function fallOut() {
+    const items = visible([...main.querySelectorAll(".item")]);
+    return settle(items.map((el, i) => el.animate([
+      { transform: "none", opacity: 1 },
+      { transform: `translateY(${Math.round(innerHeight * 0.75)}px) rotate(${rnd(9).toFixed(1)}deg)`, opacity: 0 },
+    ], { duration: 520, delay: i * 26, easing: "cubic-bezier(.55,0,.85,.3)", fill: "forwards" })));
+  }
+  function fallIn() {
+    visible([...main.querySelectorAll(".item")]).forEach((el, i) => el.animate([
+      { transform: `translateY(-90px) rotate(${rnd(6).toFixed(1)}deg)`, opacity: 0 },
+      { transform: "none", opacity: 1 },
+    ], { duration: 760, delay: i * 45, easing: "cubic-bezier(.2,.9,.3,1.12)", fill: "backwards" }));
+  }
+  // different section (Film ↔ Polaroid ↔ home): the page glides sideways like film advancing
+  function slideOut(dir) {
+    const v = main.firstElementChild;
+    return v ? settle([v.animate([
+      { transform: "none", opacity: 1 },
+      { transform: `translateX(${-dir * 8}vw)`, opacity: 0 },
+    ], { duration: 380, easing: "cubic-bezier(.6,0,.9,.4)", fill: "forwards" })]) : Promise.resolve();
+  }
+  function slideIn(dir) {
+    const v = main.firstElementChild;
+    if (!v) return;
+    v.animate([
+      { transform: `translateX(${dir * 8}vw)`, opacity: 0 },
+      { transform: "none", opacity: 1 },
+    ], { duration: 700, easing: "cubic-bezier(.2,.8,.2,1)" });
+    visible([...v.querySelectorAll(".item")]).forEach((el, i) => el.animate(
+      [{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: 120 + i * 35, fill: "backwards" }));
+  }
+
   /* ---------- router ---------- */
-  function route() {
+  let current = null, navToken = 0;
+  async function route() {
     closeLightbox();
-    const [section, slug] = location.hash.replace(/^#\/?/, "").split("/");
-    document.querySelectorAll("[data-nav]").forEach((a) =>
-      a.classList.toggle("active", a.dataset.nav === section));
-    if (section === "about") about();
-    else if (LABELS[section]) slug ? group(section, decodeURIComponent(slug)) : sectionIndex(section);
-    else home();
-    const label = section === "about" ? "About" : LABELS[section];
-    document.title = label ? `${label} — Lingyin Zhang` : "Lingyin Zhang — Photography";
+    let [section = "", slug = ""] = location.hash.replace(/^#\/?/, "").split("/");
+    if (section === "about") {                       // old links to #/about open the panel over the homepage
+      setAbout(true);
+      if (current) return;
+      section = "";
+    } else if (aboutOpen) setAbout(false);
+    if (!LABELS[section]) { section = ""; slug = ""; }
+    slug = decodeURIComponent(slug);
+    const next = { section, slug };
+    if (current && current.section === next.section && current.slug === next.slug) return;
+
+    const prev = current;
+    const kind = !prev || reduceMotion ? null : (prev.section === next.section && next.section ? "fall" : "slide");
+    const dir = prev ? (Math.sign(ORDER[next.section] - ORDER[prev.section]) || 1) : 1;
+    const my = ++navToken;
+    current = next;
+    document.querySelectorAll("nav a[data-nav]").forEach((a) =>
+      a.dataset.nav !== "about" && a.classList.toggle("active", a.dataset.nav === section));
+    document.title = LABELS[section] ? `${LABELS[section]} — Lingyin Zhang` : "Lingyin Zhang — Photography";
+
+    if (kind === "fall") await fallOut(); else if (kind === "slide") await slideOut(dir);
+    if (my !== navToken) return;                     // a newer click took over
+    if (cleanup) { cleanup(); cleanup = null; }
+    if (LABELS[section]) slug ? group(section, slug) : sectionIndex(section); else home();
     window.scrollTo(0, 0);
+    if (kind === "fall") fallIn(); else if (kind === "slide") slideIn(dir);
   }
 
   /* ---------- viewer: large photo + filmstrip + progress line ---------- */
