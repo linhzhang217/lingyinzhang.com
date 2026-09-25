@@ -42,7 +42,6 @@
     main.innerHTML = `<div class="ring-wrap" tabindex="0" aria-label="Self-portraits — scroll, drag or use the arrow keys to turn">
       <div class="ring">${list.map((p, i) =>
         `<div class="ring-card" data-i="${i}">${img({ ...p, s: p.l }, "Self-portrait of Lingyin Zhang", true)}</div>`).join("")}</div>
-      <p class="ring-hint">scroll or drag</p>
     </div>`;
     cleanup = ring(main.querySelector(".ring-wrap"));
   }
@@ -51,14 +50,14 @@
   function ring(wrap) {
     const cards = [...wrap.querySelectorAll(".ring-card")];
     const n = cards.length, step = 360 / n;
-    const hint = wrap.querySelector(".ring-hint");
     let angle = 0, target = 0, raf = 0, drag = null, idle = 0;
 
     function frame() {
       angle += (target - angle) * (reduceMotion ? 1 : 0.085);
       const r = cards[0].offsetWidth * (innerWidth < 640 ? 0.62 : n <= 3 ? 0.95 : 1.15);
       cards.forEach((c, i) => {
-        const deg = i * step + angle, th = deg * Math.PI / 180;
+        const deg = ((((i * step + angle) % 360) + 540) % 360) - 180;   // keep within -180…180 so the tilt never builds up
+        const th = deg * Math.PI / 180;
         const front = (Math.cos(th) + 1) / 2;             // 1 = facing you, 0 = at the back
         c.style.transform = `translate(-50%, -50%) translate3d(${(Math.sin(th) * r).toFixed(1)}px, 0, ${((Math.cos(th) - 1) * r).toFixed(1)}px) rotateY(${(deg * 0.3).toFixed(2)}deg)`;
         c.style.opacity = (0.3 + 0.7 * front).toFixed(3);
@@ -69,7 +68,7 @@
     }
     const go = () => { if (!raf) raf = requestAnimationFrame(frame); };
     const snap = () => { target = Math.round(target / step) * step; go(); };
-    const touched = () => { hint.classList.add("gone"); clearTimeout(idle); idle = setTimeout(snap, 160); };
+    const touched = () => { clearTimeout(idle); idle = setTimeout(snap, 160); };
     const toFront = (i) => { const base = -i * step; target = base + Math.round((target - base) / 360) * 360; go(); };
 
     wrap.addEventListener("wheel", (e) => {
@@ -85,7 +84,7 @@
     wrap.addEventListener("pointermove", (e) => {
       if (!drag) return;
       drag.moved = Math.max(drag.moved, Math.abs(e.clientX - drag.x));
-      target = drag.a + (e.clientX - drag.x) * 0.35; hint.classList.add("gone");
+      target = drag.a + (e.clientX - drag.x) * 0.35;
     });
     const end = (e) => {
       if (!drag) return;
@@ -100,8 +99,8 @@
     wrap.addEventListener("pointercancel", end);
     const onKey = (e) => {
       if (!lb.hidden || aboutOpen) return;
-      if (e.key === "ArrowRight") { target -= step; hint.classList.add("gone"); go(); }
-      if (e.key === "ArrowLeft") { target += step; hint.classList.add("gone"); go(); }
+      if (e.key === "ArrowRight") { target -= step; go(); }
+      if (e.key === "ArrowLeft") { target += step; go(); }
     };
     document.addEventListener("keydown", onKey);
     addEventListener("resize", go);

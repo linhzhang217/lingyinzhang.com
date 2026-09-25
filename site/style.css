@@ -75,14 +75,6 @@ footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
   will-change: transform, opacity;
 }
 .ring-card img { width: 100%; height: auto; box-shadow: var(--frame-shadow); pointer-events: none; -webkit-user-drag: none; }
-.ring-hint {
-  position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
-  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
-  transition: opacity .8s ease;
-}
-.ring-hint::before, .ring-hint::after { content: "⟵"; margin: 0 10px; }
-.ring-hint::after { content: "⟶"; }
-.ring-hint.gone { opacity: 0; }
 
 /* ---------- About: panel sliding down from the top ---------- */
 .about-panel {
