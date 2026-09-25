@@ -18,7 +18,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function img(p, alt, eager) {
-    return `<img src="${p.s}" width="${p.w}" height="${p.h}" alt="${esc(alt)}"
+    return `<img class="bl" onload="this.classList.add('in')" src="${p.s}" width="${p.w}" height="${p.h}" alt="${esc(alt)}"
       ${eager ? "" : 'loading="lazy"'} decoding="async">`;
   }
 
@@ -85,49 +85,85 @@
     window.scrollTo(0, 0);
   }
 
-  /* ---------- lightbox ---------- */
+  /* ---------- viewer: large photo + filmstrip + progress line ---------- */
   const lb = document.getElementById("lightbox");
   const lbImg = document.getElementById("lb-img");
-  const lbCap = document.getElementById("lb-cap");
+  const lbTitle = document.getElementById("lb-title");
+  const lbCount = document.getElementById("lb-count");
+  const strip = document.getElementById("lb-strip");
+  const bar = document.getElementById("lb-bar");
   const prev = document.getElementById("lb-prev");
   const next = document.getElementById("lb-next");
-  let list = [], idx = 0;
+  let list = [], idx = 0, token = 0;
 
   function show() {
     const p = list[idx];
-    lbImg.src = p.l;
+    const my = ++token;
+    // start from the (already loaded) grid-size copy, softly blurred, then sharpen with the large one
+    lbImg.classList.add("soft");
+    lbImg.src = p.s;
     lbImg.alt = p.title || "";
-    const count = list.length > 1 ? `${idx + 1} / ${list.length}` : "";
-    lbCap.textContent = [p.title, count].filter(Boolean).join("   ·   ");
-    prev.hidden = next.hidden = list.length < 2;
+    const hi = new Image();
+    hi.onload = () => {
+      if (my !== token) return;
+      lbImg.src = p.l;
+      requestAnimationFrame(() => requestAnimationFrame(() => lbImg.classList.remove("soft")));
+    };
+    hi.src = p.l;
+
+    lbTitle.textContent = p.title || "";
+    lbCount.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : "";
+    bar.style.width = `${((idx + 1) / list.length) * 100}%`;
+    strip.querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === idx));
+    const on = strip.children[idx];
+    if (on) strip.scrollTo({ left: on.offsetLeft - strip.clientWidth / 2 + on.clientWidth / 2 });
     [list[idx + 1], list[idx - 1]].forEach((n) => { if (n) new Image().src = n.l; }); // preload neighbours
   }
   function openLightbox(photos, i) {
-    list = photos; idx = i; show();
+    list = photos; idx = i;
+    lb.classList.toggle("single", list.length < 2);
+    strip.innerHTML = list.map((p, n) =>
+      `<button data-i="${n}" aria-label="Photo ${n + 1}"><img class="bl" onload="this.classList.add('in')" src="${p.t || p.s}" alt="" loading="lazy" decoding="async"></button>`
+    ).join("");
     lb.hidden = false; document.body.style.overflow = "hidden";
+    show();
   }
   function closeLightbox() {
     if (lb.hidden) return;
-    lb.hidden = true; document.body.style.overflow = ""; lbImg.removeAttribute("src");
+    lb.hidden = true; document.body.style.overflow = ""; token++; lbImg.removeAttribute("src");
   }
   const step = (d) => { if (list.length > 1) { idx = (idx + d + list.length) % list.length; show(); } };
 
   prev.onclick = (e) => { e.stopPropagation(); step(-1); };
   next.onclick = (e) => { e.stopPropagation(); step(1); };
+  strip.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b) { idx = +b.dataset.i; show(); }
+  });
   document.getElementById("lb-close").onclick = closeLightbox;
-  lb.addEventListener("click", (e) => { if (e.target === lb) closeLightbox(); });
+  document.getElementById("lb-stage").addEventListener("click", (e) => { if (e.target.id === "lb-stage") closeLightbox(); });
   document.addEventListener("keydown", (e) => {
     if (lb.hidden) return;
     if (e.key === "ArrowRight") step(1);
     else if (e.key === "ArrowLeft") step(-1);
     else if (e.key === "Escape") closeLightbox();
   });
+  // scrolling (mouse wheel / trackpad) moves through the photos
+  let acc = 0, lock = 0;
+  lb.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const now = Date.now();
+    if (now < lock) return;
+    acc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(acc) > 40) { step(acc > 0 ? 1 : -1); acc = 0; lock = now + 450; }
+  }, { passive: false });
+  // swipe on phones
   let x0 = null;
   lb.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
   lb.addEventListener("touchend", (e) => {
     if (x0 === null) return;
     const dx = e.changedTouches[0].clientX - x0;
-    if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) > 40 && !e.target.closest(".lb-strip")) step(dx < 0 ? 1 : -1);
     x0 = null;
   });
 

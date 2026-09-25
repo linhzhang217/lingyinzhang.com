@@ -27,7 +27,7 @@ PHOTOS = ROOT / "photos"
 OUT = ROOT / "_site"
 SECTIONS = ["film", "polaroid"]
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".heic"}
-SIZES = {"s": 1000, "l": 2200}          # long edge in pixels: grid / large view
+SIZES = {"t": 360, "s": 1000, "l": 2200}  # long edge in pixels: filmstrip / grid / large view
 QUALITY = 80
 
 INLINE = "--inline" in sys.argv          # one-file preview with images embedded
