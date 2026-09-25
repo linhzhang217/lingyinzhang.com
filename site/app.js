@@ -225,6 +225,37 @@
     };
   }
 
+
+  /* ---------- film grids: rows of equal height, last row keeps the same size ---------- */
+  function justify(grid) {
+    const items = [...grid.children];
+    const ars = items.map((el) => parseFloat(el.style.getPropertyValue("--ar")) || 1.5);
+    const lay = () => {
+      const W = grid.clientWidth - 1;
+      if (W <= 0) return;
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 20;
+      const target = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--row")) || 320;
+      const place = (row, h) => row.forEach((i) => {
+        items[i].style.flex = "none";
+        items[i].style.width = Math.floor(ars[i] * h * 100) / 100 + "px";
+      });
+      let row = [], sum = 0, lastH = target;
+      items.forEach((_, i) => {
+        row.push(i); sum += ars[i];
+        const h = (W - gap * (row.length - 1)) / sum;
+        if (h <= target) { place(row, h); lastH = h; row = []; sum = 0; }
+      });
+      if (row.length) {                              // unfinished last row: same height as the rows above
+        const fit = (W - gap * (row.length - 1)) / sum;
+        place(row, Math.min(lastH, fit));
+      }
+    };
+    lay();
+    const ro = new ResizeObserver(lay);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }
+
   function group(section, slug) {
     const groups = S.sections[section] || [];
     const g = groups.find((x) => x.slug === slug);
@@ -238,6 +269,7 @@
         </div>`).join("")}</div></div>`;
     main.querySelectorAll(".item").forEach((el) =>
       el.addEventListener("click", () => openLightbox(g.photos, +el.dataset.i)));
+    if (section !== "polaroid") cleanup = justify(main.querySelector(".grid"));
   }
 
   /* ---------- About: a panel that slides down from the top ---------- */
@@ -324,7 +356,8 @@
     current = next;
     document.querySelectorAll("nav a[data-nav]").forEach((a) =>
       a.dataset.nav !== "about" && a.classList.toggle("active", a.dataset.nav === section));
-    document.title = LABELS[section] ? `${LABELS[section]} — Lingyin Zhang` : "Lingyin Zhang — Photography";
+    const proj = slug && (S.sections[section] || []).find((g) => g.slug === slug);
+    document.title = proj ? `${proj.name} · Lingyin Z.` : LABELS[section] ? `${LABELS[section]} · Lingyin Z.` : "Lingyin Z. · Analog";
 
     if (kind === "fall") await fallOut(); else if (kind === "slide") await slideOut(dir);
     if (my !== navToken) return;                     // a newer click took over

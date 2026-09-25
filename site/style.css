@@ -42,8 +42,8 @@ header {
   padding: 28px var(--side);
 }
 .name {
-  font-family: "Homemade Apple", cursive;
-  font-size: 30px; line-height: 1.2; padding-top: 8px;
+  font-family: "Special Elite", "Courier New", monospace;
+  font-size: 26px; line-height: 1.2; letter-spacing: .02em;
 }
 nav { display: flex; gap: 28px; align-items: center; }
 nav a { color: var(--muted); transition: color .2s; }
@@ -261,8 +261,8 @@ footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
 /* ---------- phones ---------- */
 @media (max-width: 640px) {
   :root { --row: 170px; --gap: 10px; --side: 20px; }
-  header { flex-direction: column; gap: 12px; padding: 20px var(--side); }
-  .name { font-size: 26px; }
+  header { flex-direction: column; gap: 26px; padding: 24px var(--side) 12px; }
+  .name { font-size: 24px; }
   nav { gap: 22px; }
   main { padding-top: 16px; }
   .home img { width: 100%; max-height: none; }
