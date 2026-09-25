@@ -82,6 +82,15 @@ def process(src, rel_base):
     return entry
 
 
+def read_intro(folder):
+    """intro.txt inside a project folder -> list of paragraphs (lines starting with # are notes, hidden)."""
+    f = folder / "intro.txt"
+    if not f.exists():
+        return []
+    lines = [l for l in f.read_text(encoding="utf-8", errors="ignore").splitlines() if not l.lstrip().startswith("#")]
+    return [" ".join(b.split()) for b in re.split(r"\n\s*\n", "\n".join(lines).strip()) if b.strip()]
+
+
 def read_about():
     f = ROOT / "about.txt"
     if not f.exists():
@@ -130,7 +139,7 @@ def main():
                     e["title"] = title_for(f)
                     photos.append(e)
             if photos:
-                groups.append({"name": name, "slug": s, "photos": photos})
+                groups.append({"name": name, "slug": s, "photos": photos, "intro": read_intro(folder)})
         data["sections"][section] = groups
 
     js = "window.SITE = " + json.dumps(data, ensure_ascii=False) + ";"

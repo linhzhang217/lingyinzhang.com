@@ -108,16 +108,121 @@
     return () => { cancelAnimationFrame(raf); clearTimeout(idle); document.removeEventListener("keydown", onKey); removeEventListener("resize", go); };
   }
 
+  /* ---------- Film / Polaroid overview: covers drifting along an S-curve ---------- */
+  const lastPos = {};            // remember which project was in front, per section
+
   function sectionIndex(section) {
     const groups = S.sections[section] || [];
     if (!groups.length) { main.innerHTML = `<div><p class="empty">Coming soon.</p></div>`; return; }
-    main.innerHTML = `<div class="${section}">
-      ${subnav(section, groups, null)}
-      <div class="grid">${groups.map((g, i) => {
-        const c = g.photos[0];
-        return `<a class="item cover" href="#/${section}/${g.slug}" style="--ar:${(c.w / c.h).toFixed(4)}">
-          ${img(c, g.name, i < 6)}<div class="label">${esc(g.name)}</div></a>`;
-      }).join("")}</div></div>`;
+    main.innerHTML = `<div class="${section}">${subnav(section, groups, null)}<div class="overview">
+      <div class="s-stage" tabindex="0" aria-label="Projects — scroll, drag or use the arrow keys">
+        <div class="s-track">${groups.map((g, i) =>
+          `<a class="s-card" data-i="${i}" href="#/${section}/${g.slug}" draggable="false">${img(g.photos[0], g.name, true)}</a>`).join("")}</div>
+      </div>
+      <aside class="s-info" aria-live="polite">
+        <div class="s-index"><span id="s-num">01</span><span class="s-line"></span><span>${String(groups.length).padStart(2, "0")}</span></div>
+        <div class="s-text" id="s-text"></div>
+        <div class="s-dots">${groups.map((g, i) => `<button data-i="${i}" aria-label="${esc(g.name)}"></button>`).join("")}</div>
+      </aside>
+    </div></div>`;
+    cleanup = sCurve(section, groups, main.querySelector(".overview"));
+  }
+
+  function sCurve(section, groups, view) {
+    const stage = view.querySelector(".s-stage");
+    const cards = [...view.querySelectorAll(".s-card")];
+    const dots = [...view.querySelectorAll(".s-dots button")];
+    const text = view.querySelector("#s-text");
+    const num = view.querySelector("#s-num");
+    const n = cards.length, max = n - 1;
+    const start = Math.min(lastPos[section] || 0, max);
+    let pos = reduceMotion ? start : start - 1.6, target = start, raf = 0, drag = null, idle = 0, shown = -1;
+
+    function info(i) {
+      if (i === shown) return;
+      shown = i; lastPos[section] = i;
+      const g = groups[i];
+      num.textContent = String(i + 1).padStart(2, "0");
+      text.innerHTML = `<h2>${esc(g.name)}</h2>
+        <p class="s-count">${g.photos.length} photograph${g.photos.length === 1 ? "" : "s"}</p>
+        ${(g.intro || []).map((p) => `<p>${esc(p)}</p>`).join("")}
+        <a class="s-open" href="#/${section}/${g.slug}">View project <span>→</span></a>`;
+      if (!reduceMotion) text.animate([{ opacity: 0, transform: "translateY(14px)", filter: "blur(4px)" },
+        { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 650, easing: "cubic-bezier(.2,.8,.2,1)" });
+      dots.forEach((d, k) => d.classList.toggle("on", k === i));
+    }
+
+    function frame() {
+      pos += (target - pos) * (reduceMotion ? 1 : 0.09);
+      const w = cards[0].offsetWidth || 300;
+      const narrow = innerWidth < 760;
+      const sx = w * (narrow ? 0.72 : 0.9), sy = stage.clientHeight * (narrow ? 0.15 : 0.19), k = 1.5;
+      cards.forEach((c, i) => {
+        const u = i - pos, au = Math.abs(u);
+        const x = u * sx;
+        const y = -Math.sin(u * k) * sy;                          // a wave: up, back, down — an S through the frame
+        const z = -au * (narrow ? 170 : 240);
+        const slope = -Math.cos(u * k) * k * sy / sx;             // lean along the curve…
+        const rz = Math.atan(slope) * 57.3 * 0.3 * Math.min(au, 1);   // …but the front photo stays straight
+        const ry = Math.max(-55, Math.min(55, -u * 22));
+        c.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, ${z.toFixed(1)}px) rotateY(${ry.toFixed(2)}deg) rotateZ(${rz.toFixed(2)}deg)`;
+        c.style.opacity = Math.max(0, 1 - Math.max(0, au - 0.15) * 0.4).toFixed(3);
+        c.style.zIndex = 100 - Math.round(au * 10);
+        c.style.filter = au < 0.08 ? "none" : `blur(${Math.min(4, au * 1.6).toFixed(2)}px) grayscale(${Math.min(0.6, au * 0.3).toFixed(2)})`;
+        c.classList.toggle("front", au < 0.5);
+        c.style.pointerEvents = au > 3.2 ? "none" : "auto";
+      });
+      info(Math.max(0, Math.min(max, Math.round(pos))));
+      raf = (Math.abs(target - pos) > 0.002 || drag) ? requestAnimationFrame(frame) : 0;
+    }
+    const go = () => { if (!raf) raf = requestAnimationFrame(frame); };
+    const clamp = (v) => Math.max(-0.35, Math.min(max + 0.35, v));
+    const snap = () => { target = Math.max(0, Math.min(max, Math.round(target))); go(); };
+    const to = (i) => { target = Math.max(0, Math.min(max, i)); go(); };
+
+    stage.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      target = clamp(target + Math.max(-80, Math.min(80, d)) * 0.006);
+      clearTimeout(idle); idle = setTimeout(snap, 170); go();
+    }, { passive: false });
+    stage.addEventListener("pointerdown", (e) => {
+      if (e.button) return;
+      drag = { x: e.clientX, y: e.clientY, t: target, moved: 0, id: e.pointerId };
+      go();
+    });
+    addEventListener("pointermove", onMove);
+    function onMove(e) {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
+      if (drag.moved > 6) { stage.classList.add("grabbing"); target = clamp(drag.t - (dx + dy * 0.4) / (cards[0].offsetWidth * 0.8)); }
+    }
+    addEventListener("pointerup", onUp);
+    addEventListener("pointercancel", onUp);
+    function onUp() { if (!drag) return; const moved = drag.moved; drag = null; stage.classList.remove("grabbing"); if (moved > 6) { stage.dataset.dragged = "1"; setTimeout(() => delete stage.dataset.dragged, 50); } snap(); }
+
+    // clicking: the front cover opens the project, any other cover slides to the front
+    cards.forEach((c) => c.addEventListener("click", (e) => {
+      if (stage.dataset.dragged) { e.preventDefault(); return; }
+      const i = +c.dataset.i;
+      if (Math.round(target) !== i) { e.preventDefault(); to(i); }
+    }));
+    dots.forEach((d) => d.addEventListener("click", () => to(+d.dataset.i)));
+    const onKey = (e) => {
+      if (!lb.hidden || aboutOpen) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); to(Math.round(target) + 1); }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); to(Math.round(target) - 1); }
+      if (e.key === "Enter" && document.activeElement === stage) location.hash = `#/${section}/${groups[Math.round(target)].slug}`;
+    };
+    document.addEventListener("keydown", onKey);
+    addEventListener("resize", go);
+    frame(); go();
+    return () => {
+      cancelAnimationFrame(raf); clearTimeout(idle);
+      document.removeEventListener("keydown", onKey); removeEventListener("resize", go);
+      removeEventListener("pointermove", onMove); removeEventListener("pointerup", onUp); removeEventListener("pointercancel", onUp);
+    };
   }
 
   function group(section, slug) {

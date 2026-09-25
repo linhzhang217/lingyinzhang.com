@@ -203,6 +203,61 @@ footer { padding: 28px var(--side); font-size: 12px; color: var(--muted); }
   * { transition: none !important; scroll-behavior: auto !important; }
 }
 
+/* ---------- Film / Polaroid overview: S-curve of project covers + introduction ---------- */
+.overview {
+  display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  gap: 32px; align-items: center; min-height: calc(100vh - 230px);
+}
+.s-stage {
+  position: relative; height: min(72vh, 760px);
+  perspective: 1500px; perspective-origin: 45% 50%;
+  cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; outline: none;
+}
+.s-stage.grabbing { cursor: grabbing; }
+.s-stage {                                   /* covers dissolve softly at the edges */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 9%, #000 86%, transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 9%, #000 86%, transparent 100%);
+}
+.s-track { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+.s-card {
+  position: absolute; left: 50%; top: 50%;
+  width: min(24vw, 360px);
+  will-change: transform, opacity, filter;
+  -webkit-user-drag: none;
+}
+.polaroid .s-card { width: min(20vw, 300px); }
+.s-card img { width: 100%; height: auto; pointer-events: none; -webkit-user-drag: none; transition: box-shadow .5s ease; }
+.polaroid .s-card img { box-shadow: var(--frame-shadow); }
+.s-card.front { cursor: pointer; }
+.s-card.front img { box-shadow: 0 18px 50px rgba(0,0,0,.18); }
+[data-theme="dark"] .s-card.front img { box-shadow: 0 18px 60px rgba(255,255,255,.06); }
+
+.s-info { max-width: 380px; align-self: center; }
+.s-index { display: flex; align-items: center; gap: 12px; font-size: 11px; letter-spacing: .14em; color: var(--muted); margin-bottom: 28px; }
+.s-line { width: 40px; height: 1px; background: var(--muted); opacity: .6; }
+.s-text h2 {
+  font-weight: 400; font-size: clamp(26px, 2.6vw, 40px); line-height: 1.1; letter-spacing: -.01em;
+  margin-bottom: 10px;
+}
+.s-count { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 26px; }
+.s-text p:not(.s-count) { font-size: 14px; line-height: 1.75; margin-bottom: 14px; color: var(--fg); opacity: .85; }
+.s-open { display: inline-flex; gap: 10px; margin-top: 18px; font-size: 13px; border-bottom: 1px solid var(--muted); padding-bottom: 3px; }
+.s-open span { transition: transform .3s var(--ease-out); }
+.s-open:hover span { transform: translateX(5px); }
+.s-dots { display: flex; gap: 10px; margin-top: 44px; }
+.s-dots button { width: 18px; height: 2px; padding: 0; background: var(--muted); opacity: .35; transition: opacity .3s, width .4s var(--ease-out); }
+.s-dots button.on { opacity: 1; width: 36px; background: var(--fg); }
+.s-dots button::before { content: ""; display: block; margin: -10px 0; height: 22px; }  /* bigger tap area */
+
+@media (max-width: 760px) {
+  .overview { grid-template-columns: 1fr; gap: 8px; min-height: 0; }
+  .s-stage { height: 52vh; }
+  .s-card, .polaroid .s-card { width: 56vw; }
+  .s-info { max-width: none; padding-bottom: 20px; }
+  .s-index { margin-bottom: 14px; }
+  .s-dots { margin-top: 26px; }
+}
+
 /* ---------- phones ---------- */
 @media (max-width: 640px) {
   :root { --row: 170px; --gap: 10px; --side: 20px; }
