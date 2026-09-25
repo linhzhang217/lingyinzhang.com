@@ -120,7 +120,6 @@
           `<a class="s-card" data-i="${i}" href="#/${section}/${g.slug}" draggable="false">${img(g.photos[0], g.name, true)}</a>`).join("")}</div>
       </div>
       <aside class="s-info" aria-live="polite">
-        <div class="s-index"><span id="s-num">01</span><span class="s-line"></span><span>${String(groups.length).padStart(2, "0")}</span></div>
         <div class="s-text" id="s-text"></div>
         <div class="s-dots">${groups.map((g, i) => `<button data-i="${i}" aria-label="${esc(g.name)}"></button>`).join("")}</div>
       </aside>
@@ -133,7 +132,6 @@
     const cards = [...view.querySelectorAll(".s-card")];
     const dots = [...view.querySelectorAll(".s-dots button")];
     const text = view.querySelector("#s-text");
-    const num = view.querySelector("#s-num");
     const n = cards.length, max = n - 1;
     const start = Math.min(lastPos[section] || 0, max);
     let pos = reduceMotion ? start : start - 1.6, target = start, raf = 0, drag = null, idle = 0, shown = -1;
@@ -142,9 +140,7 @@
       if (i === shown) return;
       shown = i; lastPos[section] = i;
       const g = groups[i];
-      num.textContent = String(i + 1).padStart(2, "0");
       text.innerHTML = `<h2>${esc(g.name)}</h2>
-        <p class="s-count">${g.photos.length} photograph${g.photos.length === 1 ? "" : "s"}</p>
         ${(g.intro || []).map((p) => `<p>${esc(p)}</p>`).join("")}
         <a class="s-open" href="#/${section}/${g.slug}">View project <span>→</span></a>`;
       if (!reduceMotion) text.animate([{ opacity: 0, transform: "translateY(14px)", filter: "blur(4px)" },
